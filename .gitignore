@@ -1,4 +1,4 @@
-multiple-layer-ground-truth.patch
+# multiple-layer-ground-truth.patch
 MultiRAFT/checkpoints/
 RAFT/checkpoints/
 **/__pycache__/
@@ -10,3 +10,4 @@ syn_datagen/images_data/
 .config
 .nv
 *.zip
+settings.json

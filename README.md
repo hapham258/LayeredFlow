@@ -1,3 +1,31 @@
+Setup:
+```
+conda create -n layeredflow_all python=3.10
+conda activate layeredflow_all
+pip install numpy zstandard cython opencv-python matplotlib scipy
+
+git clone --depth 1 --branch v3.6.14 https://github.com/blender/blender.git
+cd blender
+git apply ../multiple-layer-ground-truth.patch
+mkdir build && cd build
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DPYTHON_VERSION=3.10 \
+    -DPYTHON_EXECUTABLE=$CONDA_PREFIX/bin/python \
+    -DPYTHON_LIBRARY=$CONDA_PREFIX/lib/libpython3.10.so \
+    -DPYTHON_INCLUDE_DIR=$CONDA_PREFIX/include/python3.10 \
+    -DCMAKE_INSTALL_PREFIX=$(pwd)/install
+make -j
+make install
+cd ../../
+```
+Generate dataset:
+```
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+cd syn_datagen
+./generate.sh
+```
+
 # [ECCV24] LayeredFlow Benchmark
 
 We introduce **LayeredFlow**, a real world benchmark with multi-layer annotations for optical flow of non-Lambertian objects, featuring 150k optical flow and stereo pairs across 185 diverse scenes with 360 unique objects.

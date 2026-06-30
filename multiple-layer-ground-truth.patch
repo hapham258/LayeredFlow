@@ -1,0 +1,372 @@
+diff --git a/intern/cycles/blender/addon/engine.py b/intern/cycles/blender/addon/engine.py
+index 6a28582..f589522 100644
+--- a/intern/cycles/blender/addon/engine.py
++++ b/intern/cycles/blender/addon/engine.py
+@@ -238,6 +238,19 @@ def list_render_passes(scene, srl):
+         yield ("Denoising Normal", "XYZ", 'VECTOR')
+         yield ("Denoising Albedo", "RGB", 'COLOR')
+         yield ("Denoising Depth", "Z", 'VALUE')
++        yield ("Denoising Position 0", "XYZ", 'VECTOR')
++        yield ("Denoising Position 1", "XYZ", 'VECTOR')
++        yield ("Denoising Position 2", "XYZ", 'VECTOR')
++        yield ("Denoising Position 3", "XYZ", 'VECTOR')
++        yield ("Denoising Vector 0", "XYZ", 'VECTOR')
++        yield ("Denoising Vector 1", "XYZ", 'VECTOR')
++        yield ("Denoising Vector 2", "XYZ", 'VECTOR')
++        yield ("Denoising Vector 3", "XYZ", 'VECTOR')
++        yield ("Denoising Mask 0", "Z", 'VALUE')
++        yield ("Denoising Mask 1", "Z", 'VALUE')
++        yield ("Denoising Mask 2", "Z", 'VALUE')
++        yield ("Denoising Mask 3", "Z", 'VALUE')
++       
+ 
+     # Custom AOV passes.
+     for aov in srl.aovs:
+diff --git a/intern/cycles/blender/sync.cpp b/intern/cycles/blender/sync.cpp
+index 40979df..4955b36 100644
+--- a/intern/cycles/blender/sync.cpp
++++ b/intern/cycles/blender/sync.cpp
+@@ -631,6 +631,21 @@ static bool get_known_pass_type(BL::RenderPass &b_pass, PassType &type, PassMode
+   MAP_PASS("Denoising Albedo", PASS_DENOISING_ALBEDO, true);
+   MAP_PASS("Denoising Depth", PASS_DENOISING_DEPTH, true);
+ 
++  MAP_PASS("Denoising Position 0", PASS_DENOISING_POSITION_0, true);
++  MAP_PASS("Denoising Position 1", PASS_DENOISING_POSITION_1, true);
++  MAP_PASS("Denoising Position 2", PASS_DENOISING_POSITION_2, true);
++  MAP_PASS("Denoising Position 3", PASS_DENOISING_POSITION_3, true);
++
++  MAP_PASS("Denoising Vector 0", PASS_DENOISING_VECTOR_0, true);
++  MAP_PASS("Denoising Vector 1", PASS_DENOISING_VECTOR_1, true);
++  MAP_PASS("Denoising Vector 2", PASS_DENOISING_VECTOR_2, true);
++  MAP_PASS("Denoising Vector 3", PASS_DENOISING_VECTOR_3, true);
++
++  MAP_PASS("Denoising Mask 0", PASS_DENOISING_MASK_0, true);
++  MAP_PASS("Denoising Mask 1", PASS_DENOISING_MASK_1, true);
++  MAP_PASS("Denoising Mask 2", PASS_DENOISING_MASK_2, true);
++  MAP_PASS("Denoising Mask 3", PASS_DENOISING_MASK_3, true);
++
+   MAP_PASS("Shadow Catcher", PASS_SHADOW_CATCHER, false);
+   MAP_PASS("Noisy Shadow Catcher", PASS_SHADOW_CATCHER, true);
+ 
+@@ -735,7 +750,7 @@ void BlenderSync::sync_render_passes(BL::RenderLayer &b_rlay, BL::ViewLayer &b_v
+       continue;
+     }
+ 
+-    if (pass_type == PASS_MOTION &&
++    if ((pass_type == PASS_MOTION || pass_type == PASS_DENOISING_VECTOR_0) &&
+         (b_view_layer.use_motion_blur() && b_scene.render().use_motion_blur()))
+     {
+       continue;
+diff --git a/intern/cycles/kernel/data_template.h b/intern/cycles/kernel/data_template.h
+index 8851a2b..687b931 100644
+--- a/intern/cycles/kernel/data_template.h
++++ b/intern/cycles/kernel/data_template.h
+@@ -124,6 +124,18 @@ KERNEL_STRUCT_MEMBER(film, float, mist_falloff)
+ KERNEL_STRUCT_MEMBER(film, int, pass_denoising_normal)
+ KERNEL_STRUCT_MEMBER(film, int, pass_denoising_albedo)
+ KERNEL_STRUCT_MEMBER(film, int, pass_denoising_depth)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_position_0)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_position_1)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_position_2)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_position_3)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_vector_0)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_vector_1)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_vector_2)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_vector_3)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_mask_0)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_mask_1)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_mask_2)
++KERNEL_STRUCT_MEMBER(film, int, pass_denoising_mask_3)
+ /* AOVs. */
+ KERNEL_STRUCT_MEMBER(film, int, pass_aov_color)
+ KERNEL_STRUCT_MEMBER(film, int, pass_aov_value)
+diff --git a/intern/cycles/kernel/device/cuda/config.h b/intern/cycles/kernel/device/cuda/config.h
+index 2dbe69c..11a2e70 100644
+--- a/intern/cycles/kernel/device/cuda/config.h
++++ b/intern/cycles/kernel/device/cuda/config.h
+@@ -72,6 +72,17 @@
+ #  define GPU_KERNEL_BLOCK_NUM_THREADS 512
+ #  define GPU_KERNEL_MAX_REGISTERS 96
+ 
++/* 12.x */
++#elif __CUDA_ARCH__ <= 1200
++#  define GPU_MULTIPRESSOR_MAX_REGISTERS 65536
++#  define GPU_MULTIPROCESSOR_MAX_BLOCKS 32
++#  define GPU_BLOCK_MAX_THREADS 1024
++#  define GPU_THREAD_MAX_REGISTERS 255
++
++/* tunable parameters */
++#  define GPU_KERNEL_BLOCK_NUM_THREADS 512
++#  define GPU_KERNEL_MAX_REGISTERS 96
++
+ /* unknown architecture */
+ #else
+ #  error "Unknown or unsupported CUDA architecture, can't determine launch bounds"
+diff --git a/intern/cycles/kernel/film/denoising_passes.h b/intern/cycles/kernel/film/denoising_passes.h
+index 06a815a..00d0c38 100644
+--- a/intern/cycles/kernel/film/denoising_passes.h
++++ b/intern/cycles/kernel/film/denoising_passes.h
+@@ -42,6 +42,69 @@ ccl_device_forceinline void film_write_denoising_features_surface(KernelGlobals
+     film_write_pass_float(buffer + kernel_data.film.pass_denoising_depth, denoising_depth);
+   }
+ 
++  if (kernel_data.film.pass_denoising_position_0 != PASS_UNUSED) {
++    const float3 position = sd->P;
++    const int bounce = (int)INTEGRATOR_STATE(state, path, bounce);
++    switch (bounce) {
++    case 0:
++      film_write_pass_float3(buffer + kernel_data.film.pass_denoising_position_0, position);
++      break;
++    case 2:
++      film_write_pass_float3(buffer + kernel_data.film.pass_denoising_position_1, position);
++      break;
++    case 4:
++      film_write_pass_float3(buffer + kernel_data.film.pass_denoising_position_2, position);
++      break;
++    case 6:
++      film_write_pass_float3(buffer + kernel_data.film.pass_denoising_position_3, position);
++      break;
++    default:
++      break;
++    }
++  }
++
++  if (kernel_data.film.pass_denoising_vector_0 != PASS_UNUSED) {
++    const float4 speed = primitive_motion_vector(kg, sd);
++    const int bounce = (int)INTEGRATOR_STATE(state, path, bounce);
++    switch (bounce) {
++    case 0:
++      film_write_pass_float4(buffer + kernel_data.film.pass_denoising_vector_0, speed);
++      break;
++    case 2:
++      film_write_pass_float4(buffer + kernel_data.film.pass_denoising_vector_1, speed);
++      break;
++    case 4:
++      film_write_pass_float4(buffer + kernel_data.film.pass_denoising_vector_2, speed);
++      break;
++    case 6:
++      film_write_pass_float4(buffer + kernel_data.film.pass_denoising_vector_3, speed);
++      break;
++    default:
++      break;
++    }
++  }
++
++  if (kernel_data.film.pass_denoising_mask_0 != PASS_UNUSED) {
++    const float mask = 1.0;
++    const int bounce = (int)INTEGRATOR_STATE(state, path, bounce);
++    switch (bounce) {
++    case 0:
++      film_write_pass_float(buffer + kernel_data.film.pass_denoising_mask_0, mask);
++      break;
++    case 2:
++      film_write_pass_float(buffer + kernel_data.film.pass_denoising_mask_1, mask);
++      break;
++    case 4:
++      film_write_pass_float(buffer + kernel_data.film.pass_denoising_mask_2, mask);
++      break;
++    case 6:
++      film_write_pass_float(buffer + kernel_data.film.pass_denoising_mask_3, mask);
++      break;
++    default:
++      break;
++    }
++  }
++
+   float3 normal = zero_float3();
+   Spectrum diffuse_albedo = zero_spectrum();
+   Spectrum specular_albedo = zero_spectrum();
+diff --git a/intern/cycles/kernel/types.h b/intern/cycles/kernel/types.h
+index c11df3d..13b6667 100644
+--- a/intern/cycles/kernel/types.h
++++ b/intern/cycles/kernel/types.h
+@@ -396,6 +396,18 @@ typedef enum PassType {
+   PASS_DENOISING_NORMAL,
+   PASS_DENOISING_ALBEDO,
+   PASS_DENOISING_DEPTH,
++  PASS_DENOISING_POSITION_0,
++  PASS_DENOISING_POSITION_1,
++  PASS_DENOISING_POSITION_2,
++  PASS_DENOISING_POSITION_3,
++  PASS_DENOISING_VECTOR_0,
++  PASS_DENOISING_VECTOR_1,
++  PASS_DENOISING_VECTOR_2,
++  PASS_DENOISING_VECTOR_3,
++  PASS_DENOISING_MASK_0,
++  PASS_DENOISING_MASK_1,
++  PASS_DENOISING_MASK_2,
++  PASS_DENOISING_MASK_3,
+   PASS_DENOISING_PREVIOUS,
+ 
+   /* PASS_SHADOW_CATCHER accumulates contribution of shadow catcher object which is not affected by
+@@ -420,11 +432,11 @@ typedef enum PassType {
+   PASS_GUIDING_PROBABILITY,
+   /* The avg. roughness at the first bounce. */
+   PASS_GUIDING_AVG_ROUGHNESS,
+-  PASS_CATEGORY_DATA_END = 63,
++  PASS_CATEGORY_DATA_END = 83,
+ 
+   PASS_BAKE_PRIMITIVE,
+   PASS_BAKE_DIFFERENTIAL,
+-  PASS_CATEGORY_BAKE_END = 95,
++  PASS_CATEGORY_BAKE_END = 115,
+ 
+   PASS_NUM,
+ } PassType;
+diff --git a/intern/cycles/scene/film.cpp b/intern/cycles/scene/film.cpp
+index fcb34bc..9543e32 100644
+--- a/intern/cycles/scene/film.cpp
++++ b/intern/cycles/scene/film.cpp
+@@ -189,6 +189,18 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
+   kfilm->pass_denoising_normal = PASS_UNUSED;
+   kfilm->pass_denoising_albedo = PASS_UNUSED;
+   kfilm->pass_denoising_depth = PASS_UNUSED;
++  kfilm->pass_denoising_position_0 = PASS_UNUSED;
++  kfilm->pass_denoising_position_1 = PASS_UNUSED;
++  kfilm->pass_denoising_position_2 = PASS_UNUSED;
++  kfilm->pass_denoising_position_3 = PASS_UNUSED;
++  kfilm->pass_denoising_vector_0 = PASS_UNUSED;
++  kfilm->pass_denoising_vector_1 = PASS_UNUSED;
++  kfilm->pass_denoising_vector_2 = PASS_UNUSED;
++  kfilm->pass_denoising_vector_3 = PASS_UNUSED;
++  kfilm->pass_denoising_mask_0 = PASS_UNUSED;
++  kfilm->pass_denoising_mask_1 = PASS_UNUSED;
++  kfilm->pass_denoising_mask_2 = PASS_UNUSED;
++  kfilm->pass_denoising_mask_3 = PASS_UNUSED;
+   kfilm->pass_sample_count = PASS_UNUSED;
+   kfilm->pass_adaptive_aux_buffer = PASS_UNUSED;
+   kfilm->pass_shadow_catcher = PASS_UNUSED;
+@@ -219,7 +231,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
+     }
+ 
+     /* Can't do motion pass if no motion vectors are available. */
+-    if (pass->get_type() == PASS_MOTION || pass->get_type() == PASS_MOTION_WEIGHT) {
++    if (pass->get_type() == PASS_MOTION || pass->get_type() == PASS_MOTION_WEIGHT ||
++      pass->get_type() == PASS_DENOISING_VECTOR_0 || pass->get_type() == PASS_DENOISING_VECTOR_1 ||
++      pass->get_type() == PASS_DENOISING_VECTOR_2 || pass->get_type() == PASS_DENOISING_VECTOR_3) {
+       if (scene->need_motion() != Scene::MOTION_PASS) {
+         kfilm->pass_stride += pass->get_info().num_components;
+         continue;
+@@ -348,6 +362,42 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
+       case PASS_DENOISING_DEPTH:
+         kfilm->pass_denoising_depth = kfilm->pass_stride;
+         break;
++      case PASS_DENOISING_POSITION_0:
++        kfilm->pass_denoising_position_0 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_POSITION_1:
++        kfilm->pass_denoising_position_1 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_POSITION_2:
++        kfilm->pass_denoising_position_2 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_POSITION_3:
++        kfilm->pass_denoising_position_3 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_VECTOR_0:
++        kfilm->pass_denoising_vector_0 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_VECTOR_1:
++        kfilm->pass_denoising_vector_1 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_VECTOR_2:
++        kfilm->pass_denoising_vector_2 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_VECTOR_3:
++        kfilm->pass_denoising_vector_3 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_MASK_0:
++        kfilm->pass_denoising_mask_0 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_MASK_1:
++        kfilm->pass_denoising_mask_1 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_MASK_2:
++        kfilm->pass_denoising_mask_2 = kfilm->pass_stride;
++        break;
++      case PASS_DENOISING_MASK_3:
++        kfilm->pass_denoising_mask_3 = kfilm->pass_stride;
++        break;
+ 
+       case PASS_SHADOW_CATCHER:
+         kfilm->pass_shadow_catcher = kfilm->pass_stride;
+@@ -564,7 +614,7 @@ void Film::update_passes(Scene *scene, bool add_sample_count_pass)
+ 
+   /* Flush scene updates. */
+   const bool have_uv_pass = Pass::contains(scene->passes, PASS_UV);
+-  const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION);
++  const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION) || Pass::contains(scene->passes, PASS_DENOISING_VECTOR_0);
+   const bool have_ao_pass = Pass::contains(scene->passes, PASS_AO);
+ 
+   if (have_uv_pass != prev_have_uv_pass) {
+@@ -713,7 +763,8 @@ uint Film::get_kernel_features(const Scene *scene) const
+     const PassMode pass_mode = pass->get_mode();
+ 
+     if (pass_mode == PassMode::DENOISED || pass_type == PASS_DENOISING_NORMAL ||
+-        pass_type == PASS_DENOISING_ALBEDO || pass_type == PASS_DENOISING_DEPTH)
++        pass_type == PASS_DENOISING_ALBEDO || pass_type == PASS_DENOISING_DEPTH || pass_type == PASS_DENOISING_POSITION_0 || 
++        pass_type == PASS_DENOISING_VECTOR_0 || pass_type == PASS_DENOISING_MASK_0)
+     {
+       kernel_features |= KERNEL_FEATURE_DENOISING;
+     }
+diff --git a/intern/cycles/scene/pass.cpp b/intern/cycles/scene/pass.cpp
+index 8718a46..4a55e40 100644
+--- a/intern/cycles/scene/pass.cpp
++++ b/intern/cycles/scene/pass.cpp
+@@ -87,6 +87,18 @@ const NodeEnum *Pass::get_type_enum()
+     pass_type_enum.insert("denoising_normal", PASS_DENOISING_NORMAL);
+     pass_type_enum.insert("denoising_albedo", PASS_DENOISING_ALBEDO);
+     pass_type_enum.insert("denoising_depth", PASS_DENOISING_DEPTH);
++    pass_type_enum.insert("denoising_position_0", PASS_DENOISING_POSITION_0);
++    pass_type_enum.insert("denoising_position_1", PASS_DENOISING_POSITION_1);
++    pass_type_enum.insert("denoising_position_2", PASS_DENOISING_POSITION_2);
++    pass_type_enum.insert("denoising_position_3", PASS_DENOISING_POSITION_3);
++    pass_type_enum.insert("denoising_vector_0", PASS_DENOISING_VECTOR_0);
++    pass_type_enum.insert("denoising_vector_1", PASS_DENOISING_VECTOR_1);
++    pass_type_enum.insert("denoising_vector_2", PASS_DENOISING_VECTOR_2);
++    pass_type_enum.insert("denoising_vector_3", PASS_DENOISING_VECTOR_3);
++    pass_type_enum.insert("denoising_mask_0", PASS_DENOISING_MASK_0);
++    pass_type_enum.insert("denoising_mask_1", PASS_DENOISING_MASK_1);
++    pass_type_enum.insert("denoising_mask_2", PASS_DENOISING_MASK_2);
++    pass_type_enum.insert("denoising_mask_3", PASS_DENOISING_MASK_3);
+     pass_type_enum.insert("denoising_previous", PASS_DENOISING_PREVIOUS);
+ 
+     pass_type_enum.insert("shadow_catcher", PASS_SHADOW_CATCHER);
+@@ -287,6 +299,24 @@ PassInfo Pass::get_info(const PassType type, const bool include_albedo, const bo
+     case PASS_DENOISING_DEPTH:
+       pass_info.num_components = 1;
+       break;
++    case PASS_DENOISING_POSITION_0:
++    case PASS_DENOISING_POSITION_1:
++    case PASS_DENOISING_POSITION_2:
++    case PASS_DENOISING_POSITION_3:
++      pass_info.num_components = 3;
++      break;
++    case PASS_DENOISING_VECTOR_0:
++    case PASS_DENOISING_VECTOR_1:
++    case PASS_DENOISING_VECTOR_2:
++    case PASS_DENOISING_VECTOR_3:
++      pass_info.num_components = 4;
++      break;
++    case PASS_DENOISING_MASK_0:
++    case PASS_DENOISING_MASK_1:
++    case PASS_DENOISING_MASK_2:
++    case PASS_DENOISING_MASK_3:
++      pass_info.num_components = 1;
++      break; 
+     case PASS_DENOISING_PREVIOUS:
+       pass_info.num_components = 3;
+       pass_info.use_exposure = true;
+diff --git a/intern/cycles/scene/scene.cpp b/intern/cycles/scene/scene.cpp
+index 35cf02e..b23aeea 100644
+--- a/intern/cycles/scene/scene.cpp
++++ b/intern/cycles/scene/scene.cpp
+@@ -341,7 +341,7 @@ Scene::MotionType Scene::need_motion() const
+ {
+   if (integrator->get_motion_blur())
+     return MOTION_BLUR;
+-  else if (Pass::contains(passes, PASS_MOTION))
++  else if (Pass::contains(passes, PASS_MOTION) || Pass::contains(passes, PASS_DENOISING_VECTOR_0))
+     return MOTION_PASS;
+   else
+     return MOTION_NONE;
