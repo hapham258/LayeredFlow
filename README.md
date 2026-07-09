@@ -2,7 +2,7 @@ Setup:
 ```
 conda create -n layeredflow_all python=3.10
 conda activate layeredflow_all
-pip install numpy zstandard cython opencv-python matplotlib scipy
+pip install numpy zstandard cython opencv-python matplotlib scipy huggingface_hub
 
 git clone --depth 1 --branch v3.6.14 https://github.com/blender/blender.git
 cd blender
