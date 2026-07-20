@@ -64,6 +64,7 @@ if __name__ == "__main__":
         extract_parquet(flow_parquet, flow_extract)
         extract_parquet(rgb_parquet, rgb_extract)
         files = [
+            # Left camera
             (
                 rgb_extract / "frame0_l.png",
                 dst_dir / f"{prefix}_frame0_l.png",
@@ -74,7 +75,92 @@ if __name__ == "__main__":
             ),
             (
                 flow_extract / "frame0" / "left" / "flow_layer00_forward.flo",
-                dst_dir / f"{prefix}_flow_layer00_forward.flo",
+                dst_dir / f"{prefix}_flow_layer00_forward_l.flo",
+            ),
+            (
+                flow_extract / "frame0" / "left" / "mask_layer00.png",
+                dst_dir / f"{prefix}_mask_layer00_forward_l.png",
+            ),
+            (
+                flow_extract / "frame0" / "left" / "mask_layer01.png",
+                dst_dir / f"{prefix}_mask_layer01_forward_l.png",
+            ),
+            (
+                flow_extract / "frame0" / "left" / "mask_layer02.png",
+                dst_dir / f"{prefix}_mask_layer02_forward_l.png",
+            ),
+            (
+                flow_extract / "frame0" / "left" / "mask_layer03.png",
+                dst_dir / f"{prefix}_mask_layer03_forward_l.png",
+            ),
+            (
+                flow_extract / "frame1" / "left" / "flow_layer00_backward.flo",
+                dst_dir / f"{prefix}_flow_layer00_backward_l.flo",
+            ),
+            (
+                flow_extract / "frame1" / "left" / "mask_layer00.png",
+                dst_dir / f"{prefix}_mask_layer00_backward_l.png",
+            ),
+            (
+                flow_extract / "frame1" / "left" / "mask_layer01.png",
+                dst_dir / f"{prefix}_mask_layer01_backward_l.png",
+            ),
+            (
+                flow_extract / "frame1" / "left" / "mask_layer02.png",
+                dst_dir / f"{prefix}_mask_layer02_backward_l.png",
+            ),
+            (
+                flow_extract / "frame1" / "left" / "mask_layer03.png",
+                dst_dir / f"{prefix}_mask_layer03_backward_l.png",
+            ),
+            # Right camera
+            (
+                rgb_extract / "frame0_r.png",
+                dst_dir / f"{prefix}_frame0_r.png",
+            ),
+            (
+                rgb_extract / "frame1_r.png",
+                dst_dir / f"{prefix}_frame1_r.png",
+            ),
+            (
+                flow_extract / "frame0" / "right" / "flow_layer00_forward.flo",
+                dst_dir / f"{prefix}_flow_layer00_forward_r.flo",
+            ),
+            (
+                flow_extract / "frame0" / "right" / "mask_layer00.png",
+                dst_dir / f"{prefix}_mask_layer00_forward_r.png",
+            ),
+            (
+                flow_extract / "frame0" / "right" / "mask_layer01.png",
+                dst_dir / f"{prefix}_mask_layer01_forward_r.png",
+            ),
+            (
+                flow_extract / "frame0" / "right" / "mask_layer02.png",
+                dst_dir / f"{prefix}_mask_layer02_forward_r.png",
+            ),
+            (
+                flow_extract / "frame0" / "right" / "mask_layer03.png",
+                dst_dir / f"{prefix}_mask_layer03_forward_r.png",
+            ),
+            (
+                flow_extract / "frame1" / "right" / "flow_layer00_backward.flo",
+                dst_dir / f"{prefix}_flow_layer00_backward_r.flo",
+            ),
+            (
+                flow_extract / "frame1" / "right" / "mask_layer00.png",
+                dst_dir / f"{prefix}_mask_layer00_backward_r.png",
+            ),
+            (
+                flow_extract / "frame1" / "right" / "mask_layer01.png",
+                dst_dir / f"{prefix}_mask_layer01_backward_r.png",
+            ),
+            (
+                flow_extract / "frame1" / "right" / "mask_layer02.png",
+                dst_dir / f"{prefix}_mask_layer02_backward_r.png",
+            ),
+            (
+                flow_extract / "frame1" / "right" / "mask_layer03.png",
+                dst_dir / f"{prefix}_mask_layer03_backward_r.png",
             ),
         ]
 
